@@ -1,0 +1,94 @@
+1  安装 rabbitMQ server！！！！
+RabbitMQ 是流行的开源消息队列系统，用erlang语言开发
+https://github.com/generalbao/Linux/blob/master/rabbitMQ
+
+
+
+几个概念说明：
+
+Broker：简单来说就是消息队列服务器实体。
+
+Exchange：消息交换机，它指定消息按什么规则，路由到哪个队列。
+
+Queue：消息队列载体，每个消息都会被投入到一个或多个队列。
+
+Binding：绑定，它的作用就是把exchange和queue按照路由规则绑定起来。
+
+Routing Key：路由关键字，exchange根据这个关键字进行消息投递。
+
+vhost：虚拟主机，一个broker里可以开设多个vhost，用作不同用户的权限分离。
+
+producer：消息生产者，就是投递消息的程序。
+
+consumer：消息消费者，就是接受消息的程序。
+channel：消息通道，在客户端的每个连接里，可建立多个channel，每个channel代表一个会话任务
+
+
+2 使用 php-amqp
+生产方：
+
+<?php
+$conn_args = array('host' =>'localhost', 'port' => 5672, 'login' => 'guest', 'password' => 'guest', 'vhost' => '/');
+$conn = new AMQPConnection($conn_args);
+if ($conn->connect()) {
+    echo "Established a connection to the broker \n";
+}else {
+    echo "Cannot connect to the broker \n ";
+}
+$e_name='ex_test5';//交换机名横
+$q_name='q_test5';//队列名称
+$r_key='key_test1';
+
+//你的消息
+$message = json_encode(array('Hello World!'));
+//创建channel
+$channel = new AMQPChannel($conn);
+//创建exchange
+$ex = new AMQPExchange($channel);
+$ex->setName($e_name);//创建名字
+$ex->setType(AMQP_EX_TYPE_DIRECT);
+$ex->setFlags(AMQP_DURABLE | AMQP_AUTODELETE);
+echo "exchange status:".$ex->declare();
+echo "\n";
+//创建队列
+$q = new AMQPQueue($channel);
+//设置队列名字 如果不存在则添加
+$q->setName($q_name);
+$q->setFlags(AMQP_DURABLE | AMQP_AUTODELETE);
+echo "queue status: ".$q->declare();
+echo "\n";
+echo 'queue bind: '.$q->bind($e_name,$r_key);//将你的队列绑定到routingKey
+echo "\n"; 
+
+$channel->startTransaction();
+echo "send: ".$ex->publish($message, $r_key); //将你的消息通过制定routingKey发送
+$channel->commitTransaction();
+$conn->disconnect();
+?>
+
+消费方
+
+<?php
+$conn_args = array('host' =>'localhost', 'port' => 5672, 'login' => 'guest', 'password' => 'guest', 'vhost' => '/');
+
+//$q_name='q_test6';//队列名称
+$q_name=$_GET['q'];//队列名称
+
+$conn = new AMQPConnection($conn_args); 
+$conn->connect(); 
+$channel = new AMQPChannel($conn); 
+$q = new AMQPQueue($channel); 
+$q->setName($q_name); 
+$q->setFlags(AMQP_DURABLE | AMQP_AUTODELETE); 
+
+while($a=$q->declare())
+{
+    echo "queue status: ".$a;
+    echo "==========\n";
+
+    $messages = $q->get(AMQP_AUTOACK);
+    print_r($messages->getBody()); 
+    echo "\n"; 
+}
+$conn->disconnect();
+?>
